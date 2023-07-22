@@ -5,7 +5,8 @@ let start = 0
 
 const video = document.createElement('video')
 video.loop = true
-video.src = `/video?id=${Math.floor(Math.random() * 2) + 1}`
+//video.src = `/video?id=${Math.floor(Math.random() * 2) + 1}`
+video.src = `/video?id=4`
 
 video.addEventListener('loadedmetadata', function() {
   ctx.drawImage(video, 0, 0)
