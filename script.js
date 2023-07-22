@@ -69,7 +69,7 @@ function startRecording() {
   fetch("https://app.shepherdchat.com/api/get-video-verse")
     .then(response => response.json())
     .then(data => {
-      fetch(`https://shepherd-hoster.michael8910.repl.co/create-audio?string=${data.verse+". "+data.interpretation+". "+data.tipOne+". "+data.tipTwo}}`)
+      fetch(`https://shepherd-hoster.michael8910.repl.co/create-audio?string=${data.verse+". "+data.interpretation+". "+data.tips[0]+". "+data.tips[1]}}`)
         .then(response => response.json())
         .then(audioData => {
           const newAudio = document.createElement("audio")
@@ -78,7 +78,7 @@ function startRecording() {
           newAudio.src = `https://shepherd-hoster.michael8910.repl.co/audio/${audioData}`
           document.body.appendChild(newAudio)
           newAudio.onloadedmetadata = function () {
-            const text = `${data.verse} * ${data.interpretation} * ${data.tipOne} * ${data.tipTwo}`
+            const text = `${data.verse} * ${data.interpretation} * ${data.tips[0]} * ${data.tips[1]}`
             ctx.font ="24px custom-font"
             ctx.fillStyle = "yellow"
             ctx.textAlign = "center"
