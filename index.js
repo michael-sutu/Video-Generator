@@ -1,152 +1,111 @@
-const canvas = document.getElementById('canvas1')
-const ctx = canvas.getContext('2d')
-let textData1 = ""
+import express from "express";
+import fs from 'fs';
+import multer from 'multer';
+import * as url from 'url'
+import path from "path";
+import ffmpeg from 'fluent-ffmpeg';
+const __dirname = url.fileURLToPath(new URL('.', import.meta.url))
 
-const video = document.createElement('video')
-video.loop = true
-//video.src = `/video?id=${Math.floor(Math.random() * 2) + 1}`
-video.src = `/video?id=4`
-
-video.addEventListener('loadedmetadata', function() {
-  ctx.drawImage(video, 0, 0)
-})
-
-function write(text) {
-  let words = text.split(" ")
-  let line = ""
-  let lines = []
-
-  for (let i = 0; i < words.length; i++) {
-    if(words[i] !== "*") {
-      let testLine = line + words[i] + " "
-      let metrics = ctx.measureText(testLine)
-      let testWidth = metrics.width
+const app = express();
+const storage = multer.diskStorage({
+    destination: "uploads/",
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      const fileType = getFileTypeFromMimetype(file.mimetype);
+      cb(null, file.fieldname + "-" + uniqueSuffix + "." + fileType);
+    },
+  });
   
-      if (testWidth > 460 && i > 0) {
-        lines.push(line)
-        line = words[i] + " "
-      } else {
-        line = testLine
-      }
+  const getFileTypeFromMimetype = (mimetype) => {
+    if (mimetype === "audio/mp3") {
+      return "mp3";
+    } else if (mimetype === "video/mp4") {
+      return "mp4";
+    } else if(mimetype == "video/webm") {
+      return "webm"
     } else {
-      lines.push(line)
-      line = ""
-      lines.push(" ")
+      throw new Error("Invalid file type. Only .mp3 and .mp4 files are allowed.");
     }
-  }
-
-  lines.push(line)
-
-  for (let j = 0; j < lines.length; j++) {
-    ctx.fillText(lines[j], canvas.width / 2, 50 + j * 28)
-    ctx.strokeText(lines[j], canvas.width / 2, 50 + j * 28)
-  }
-}
-
-function drawFrame() {
-  if (video.paused || video.ended) {
-    return;
-  }
+  };
   
-  ctx.drawImage(video, 0, 0)
-  write(textData1)
-  requestAnimationFrame(drawFrame)
-}
+  const fileFilter = (req, file, cb) => {
+    // Allow only .mp3 and .mp4 files based on the mimetype
+    const allowedMimeTypes = ["audio/mp3", "video/mp4"];
+  
+    if (allowedMimeTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid file type. Only .mp3 and .mp4 files are allowed."));
+    }
+  };
+  
+  const upload = multer({
+    storage: storage,
+    fileFilter: fileFilter,
+  });
+  
 
-const videoElement = document.createElement('video')
-document.body.appendChild(videoElement)
+app.listen(1000);
+console.log("Listening at http://localhost:1000");
 
-const canvasStream = canvas.captureStream()
-const mediaRecorder = new MediaRecorder(canvasStream)
-let chunks = []
+app.get("/", (req, res) => {
+    res.sendFile(__dirname+"/index.html");
+});
 
-function startRecording() {
-  document.querySelector("button").textContent = "Loading..."
-  document.querySelector("button").disabled = true
-  fetch("https://app.shepherdchat.com/api/get-video-verse")
-    .then(response => response.json())
-    .then(data => {
-      fetch(`https://shepherd-hoster.michael8910.repl.co/create-audio?string=${data.verse+". "+data.interpretation+". "+data.tips[0]+". "+data.tips[1]}}`)
-        .then(response => response.json())
-        .then(audioData => {
-          const newAudio = document.createElement("audio")
-          newAudio.preload = "metadata"
-          newAudio.id = "audioMP3"
-          newAudio.src = `https://shepherd-hoster.michael8910.repl.co/audio/${audioData}`
-          document.body.appendChild(newAudio)
-          newAudio.onloadedmetadata = function () {
-            const text = `${data.verse} * ${data.interpretation} * ${data.tips[0]} * ${data.tips[1]}`
-            ctx.font ="24px custom-font"
-            ctx.fillStyle = "yellow"
-            ctx.textAlign = "center"
-            ctx.strokeStyle = "black"
-            ctx.lineWidth = 1
-            textData1 = text
-            video.play()
-            drawFrame()
-            chunks = []
-            mediaRecorder.start()
+app.get("/script.js", (req, res) => {
+    res.sendFile(__dirname+"/script.js");
+});
 
-            setTimeout((e) => {
-              mediaRecorder.stop()
-            }, newAudio.duration * 1000)
-          }
-        })
-    })
-}
+app.get("/video", (req, res) => { 
+    res.sendFile(__dirname+`/Videos/${req.query.id}.mp4`);
+});
 
-function saveVideo() {
-  const blob = new Blob(chunks, { type: 'video/mp4' })
-  const videoUrl = URL.createObjectURL(blob)
-  videoElement.src = videoUrl
-  videoElement.controls = true
-  videoElement.id = "videoMP4"
-  videoElement.download = 'canvas-video.mp4'
+app.get("/font", (req, res) => {
+    res.sendFile(__dirname+"/font.ttf");
+});
 
-  merge()
-}
-
-async function merge() {
-  const formData = new FormData();
-  const videoPlayer = document.getElementById('videoMP4');
-  const audioPlayer = document.getElementById('audioMP3');
-
-  try {
-    const videoDataResponse = await fetch(videoPlayer.src);
-    const videoData = await videoDataResponse.arrayBuffer();
-
-    formData.append("video", new Blob([videoData], { type: "video/mp4" }));
-
-    const audioDataResponse = await fetch(audioPlayer.src);
-    const audioData = await audioDataResponse.arrayBuffer();
-
-    formData.append("audio", new Blob([audioData], { type: "audio/mp3" }));
-
-    const response = await fetch("http://localhost:1000/merge", {
-      method: "POST",
-      body: formData,
-    });
-
-    // Create a link to download the merged file
-    const downloadLink = document.createElement("a");
-    downloadLink.href = URL.createObjectURL(new Blob([await response.blob()]));
-    downloadLink.download = "merged_output.mp4";
-    downloadLink.style.display = "none";
-
-    // Append the link to the DOM and trigger the click event to download the file
-    document.body.appendChild(downloadLink);
-    downloadLink.click();
-
-    // Clean up the link element
-    document.body.removeChild(downloadLink);
-  } catch (error) {
-    console.error("Error:", error.message);
-    // Handle the error in your preferred way
+function convertToMP4(inputFilePath, outputFilePath, callback) {
+    ffmpeg(inputFilePath)
+      .output(outputFilePath)
+      .on('end', () => {
+        console.log('Conversion to MP4 completed successfully.');
+        callback(null);
+      })
+      .on('error', (err) => {
+        console.error('Error during conversion:', err.message);
+        callback(err);
+      })
+      .run();
   }
-}
 
-mediaRecorder.addEventListener('dataavailable', function (event) {
-  chunks.push(event.data)
+app.post("/merge", upload.fields([{ name: "video", maxCount: 1 }, { name: "audio", maxCount: 1 }]), (req, res) => {
+    console.log(req.files)
+    const videoFile = req.files["video"][0];
+    const audioFile = req.files["audio"][0];
+  
+    const videoPath = path.join(__dirname, videoFile.path);
+    const audioPath = path.join(__dirname, audioFile.path);
+    convertToMP4(videoPath, __dirname+"conversions/converted.mp4", (e) => {
+        ffmpeg()
+            .input(__dirname+"conversions/converted.mp4")
+            .input(audioPath)
+            .outputOptions(['-c:v copy', '-c:a aac', '-map 0:v:0', '-map 1:a:0'])
+            .on('error', (err) => {
+                console.error('An error occurred:', err.message);
+                res.status(500).send("Error occurred during conversion.");
+            })
+            .on('end', () => {
+                console.log('Conversion succeeded!');
+                res.download(path.join(__dirname, "output.mp4"), "output.mp4", (err) => {
+                    if (err) {
+                    console.error('Download error:', err.message);
+                    res.status(500).send("Error occurred during download.");
+                } else {
+                    console.log('Download succeeded!');
+                }
+                });
+            })
+            .saveToFile(path.join(__dirname, "output.mp4"), "./temp");
+    })
 })
-
-mediaRecorder.addEventListener('stop', saveVideo);
+  
