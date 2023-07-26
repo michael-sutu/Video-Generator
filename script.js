@@ -1,7 +1,6 @@
 const canvas = document.getElementById('canvas1')
 const ctx = canvas.getContext('2d')
 let textData1 = ""
-let start = 0
 
 const video = document.createElement('video')
 video.loop = true
@@ -13,9 +12,7 @@ video.addEventListener('loadedmetadata', function() {
 })
 
 function write(text) {
-  let chars = Math.floor((Date.now() - start) / 50)
-  let newText = text.substr(0, chars)
-  let words = newText.split(" ")
+  let words = text.split(" ")
   let line = ""
   let lines = []
 
@@ -86,7 +83,6 @@ function startRecording() {
             ctx.lineWidth = 1
             textData1 = text
             video.play()
-            start = Date.now()
             drawFrame()
             chunks = []
             mediaRecorder.start()
@@ -126,7 +122,7 @@ async function merge() {
 
     formData.append("audio", new Blob([audioData], { type: "audio/mp3" }));
 
-    const response = await fetch("http://localhost:1000/merge", {
+    const response = await fetch("https://shepherd-video-generator.onrender.com/merge", {
       method: "POST",
       body: formData,
     });
