@@ -1,22 +1,65 @@
-# Shepherd-Video-V2
+# Video Generator
 
-### Setup
-Clone the GitHub repo and install all the needed dependencies. 
-Download and setup ffmpeg `https://phoenixnap.com/kb/ffmpeg-windows`.
+Video Generator is a versatile web application that automates the creation of videos by combining randomly selected backgrounds with text pulled from an API. It provides an easy-to-use platform for generating unique videos with custom text overlays, suitable for content creation, marketing, and more.
 
-### Useage
-Run `node index.js`.
-Go to `http://localhost:1000`.
-Click "Start Generating".
-Wait for final mp4 file to be downloaded.
+## Features
 
-### Extra
-Close out of all other tabs to get a better result video and for it to generate faster. 
-The video generation process might take some time. 
+- **Automated Video Creation:** Combine text and backgrounds to create unique videos.
+- **Custom Text Overlays:** Fetch text from an API to overlay on video backgrounds.
+- **Flexible File Handling:** Support for multiple video and audio formats with conversion capabilities.
+- **Web Interface:** Simple web interface for uploading background and text data.
 
-### How it Works
-The text is gotten from the api and a random video file is picked. A canvas is created which is being recorded. The video file is played and its contents are being written to the background of the canvas while the text is being written on top. Then the mp3 file is generated from elevenlabs. The canvas's mp4 and the mp3 file are then sent to the backend to be merged together with ffmpeg, then the result is downloaded. 
+## Getting Started
 
-### Ideas on How to Make Better
-Generate the mp3 file in the backend while the canvas is being recorded.
-See if there is any way with ffmpeg to write a png image onto a video. This way you can make an image out of the text and just write it over the video file without anything having to be written over on to the canvas. 
+### Prerequisites
+
+- Node.js installed on your system.
+- FFmpeg installed for video processing.
+
+### Installation
+
+1. Clone the repository to your local machine:
+    ```bash
+    git clone https://github.com/michael-sutu/Video-Generator.git
+    ```
+2. Navigate to the project directory:
+    ```bash
+    cd Video-Generator
+    ```
+3. Install the required dependencies:
+    ```bash
+    npm install
+    ```
+
+### Running the Application
+
+1. Start the application:
+    ```bash
+    npm start
+    ```
+2. Open your web browser and navigate to:
+    ```plaintext
+    http://localhost:1000
+    ```
+3. Use the web interface to upload your videos and audio files or to merge them with custom text overlays.
+
+## Usage
+
+- **Uploading Files:** Use the web interface to upload background videos and optional audio files. Ensure the files adhere to the supported formats (.mp4 for videos, .mp3 for audio).
+- **Generating Videos:** After uploading, the system automatically fetches text from a predefined API and overlays it onto the chosen background video.
+- **Downloading:** Once the video is generated, you can download it directly from the web interface.
+
+## File Structure
+
+- `uploads/`: Temporary storage for uploaded video and audio files.
+- `conversions/`: Temporary storage for video conversions.
+- `Videos/`: Storage for final video outputs.
+- `index.html`: Frontend HTML file for the web interface.
+- `script.js`: Frontend JavaScript for handling UI interactions.
+
+## Technologies
+
+- **Express.js:** For setting up the server and handling HTTP requests.
+- **Multer:** For handling file uploads.
+- **FFmpeg (fluent-ffmpeg):** For video processing and conversion.
+- **Node.js:** Backend JavaScript runtime environment.
