@@ -21,7 +21,7 @@ function write(text) {
       let testLine = line + words[i] + " "
       let metrics = ctx.measureText(testLine)
       let testWidth = metrics.width
-  
+
       if (testWidth > 460 && i > 0) {
         lines.push(line)
         line = words[i] + " "
@@ -47,7 +47,7 @@ function drawFrame() {
   if (video.paused || video.ended) {
     return;
   }
-  
+
   ctx.drawImage(video, 0, 0)
   write(textData1)
   requestAnimationFrame(drawFrame)
@@ -122,10 +122,12 @@ async function merge() {
 
     formData.append("audio", new Blob([audioData], { type: "audio/mp3" }));
 
-    const response = await fetch("https://shepherd-video-generator.onrender.com/merge", {
+    const response = await fetch("/merge", {
       method: "POST",
       body: formData,
     });
+
+    if (!response.ok) throw new Error('Video processing failed');
 
     // Create a link to download the merged file
     const downloadLink = document.createElement("a");
