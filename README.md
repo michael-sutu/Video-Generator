@@ -39,7 +39,7 @@ Video Generator is a versatile web application that automates the creation of vi
     ```
 2. Open your web browser and navigate to:
     ```plaintext
-    http://localhost:1000
+    http://127.0.0.1:3000
     ```
 3. Use the web interface to upload your videos and audio files or to merge them with custom text overlays.
 
@@ -61,5 +61,11 @@ Video Generator is a versatile web application that automates the creation of vi
 
 - **Express.js:** For setting up the server and handling HTTP requests.
 - **Multer:** For handling file uploads.
-- **FFmpeg (fluent-ffmpeg):** For video processing and conversion.
+- **FFmpeg:** For video processing and conversion.
 - **Node.js:** Backend JavaScript runtime environment.
+
+## Upload and runtime limits
+
+Use Node 22 or later and an up-to-date FFmpeg installation with libx264 and AAC support. Run `npm ci --ignore-scripts --no-audit`, `npm test`, and `npm start`. Set `HOST=0.0.0.0` only when intentionally exposing the service; `PORT` defaults to 3000.
+
+The merge API accepts one MP4/WebM video and one MP3 audio file, at most 100 MiB each. Two jobs can run at once; each has a separate temporary directory removed after success or failure. Processing stops after 120 seconds, 10 minutes of output, or 200 MiB of output. Uploaded files are parsed only as media, with network input protocols disabled. The media test uses the local FFmpeg executable and requires no external services.

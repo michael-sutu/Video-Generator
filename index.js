@@ -1,111 +1,80 @@
-import express from "express";
-import fs from 'fs';
+import express from 'express';
 import multer from 'multer';
-import * as url from 'url'
-import path from "path";
-import ffmpeg from 'fluent-ffmpeg';
-const __dirname = url.fileURLToPath(new URL('.', import.meta.url))
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { mergeMedia } from './media.js';
 
-const app = express();
-const storage = multer.diskStorage({
-    destination: "uploads/",
-    filename: (req, file, cb) => {
-      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-      const fileType = getFileTypeFromMimetype(file.mimetype);
-      cb(null, file.fieldname + "-" + uniqueSuffix + "." + fileType);
-    },
-  });
-  
-  const getFileTypeFromMimetype = (mimetype) => {
-    if (mimetype === "audio/mp3") {
-      return "mp3";
-    } else if (mimetype === "video/mp4") {
-      return "mp4";
-    } else if(mimetype == "video/webm") {
-      return "webm"
-    } else {
-      throw new Error("Invalid file type. Only .mp3 and .mp4 files are allowed.");
-    }
-  };
-  
-  const fileFilter = (req, file, cb) => {
-    // Allow only .mp3 and .mp4 files based on the mimetype
-    const allowedMimeTypes = ["audio/mp3", "video/mp4"];
-  
-    if (allowedMimeTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error("Invalid file type. Only .mp3 and .mp4 files are allowed."));
-    }
-  };
-  
-  const upload = multer({
-    storage: storage,
-    fileFilter: fileFilter,
-  });
-  
+const directory = fileURLToPath(new URL('.', import.meta.url));
+const types = { 'video/mp4': 'mp4', 'video/webm': 'webm', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3' };
 
-app.listen(1000);
-console.log("Listening at http://localhost:1000");
-
-app.get("/", (req, res) => {
-    res.sendFile(__dirname+"/index.html");
-});
-
-app.get("/script.js", (req, res) => {
-    res.sendFile(__dirname+"/script.js");
-});
-
-app.get("/video", (req, res) => { 
-    res.sendFile(__dirname+`/Videos/${req.query.id}.mp4`);
-});
-
-app.get("/font", (req, res) => {
-    res.sendFile(__dirname+"/font.ttf");
-});
-
-function convertToMP4(inputFilePath, outputFilePath, callback) {
-    ffmpeg(inputFilePath)
-      .output(outputFilePath)
-      .on('end', () => {
-        console.log('Conversion to MP4 completed successfully.');
-        callback(null);
-      })
-      .on('error', (err) => {
-        console.error('Error during conversion:', err.message);
-        callback(err);
-      })
-      .run();
+export function createApp({ merge = mergeMedia, uploadRoot = tmpdir(), maxFileSize = 100 * 1024 * 1024 } = {}) {
+  const app = express();
+  app.disable('x-powered-by');
+  let active = 0;
+  for (const [route, filename] of [['/', 'index.html'], ['/script.js', 'script.js'], ['/font', 'font.ttf']]) {
+    app.get(route, (req, res) => res.sendFile(path.join(directory, filename)));
   }
+  app.get('/video', (req, res) => {
+    if (typeof req.query.id !== 'string' || !/^[1-4]$/.test(req.query.id)) {
+      return res.status(400).send('Invalid video ID.');
+    }
+    res.sendFile(`${req.query.id}.mp4`, { root: path.join(directory, 'Videos'), dotfiles: 'deny' });
+  });
 
-app.post("/merge", upload.fields([{ name: "video", maxCount: 1 }, { name: "audio", maxCount: 1 }]), (req, res) => {
-    console.log(req.files)
-    const videoFile = req.files["video"][0];
-    const audioFile = req.files["audio"][0];
-  
-    const videoPath = path.join(__dirname, videoFile.path);
-    const audioPath = path.join(__dirname, audioFile.path);
-    convertToMP4(videoPath, __dirname+"conversions/converted.mp4", (e) => {
-        ffmpeg()
-            .input(__dirname+"conversions/converted.mp4")
-            .input(audioPath)
-            .outputOptions(['-c:v copy', '-c:a aac', '-map 0:v:0', '-map 1:a:0'])
-            .on('error', (err) => {
-                console.error('An error occurred:', err.message);
-                res.status(500).send("Error occurred during conversion.");
-            })
-            .on('end', () => {
-                console.log('Conversion succeeded!');
-                res.download(path.join(__dirname, "output.mp4"), "output.mp4", (err) => {
-                    if (err) {
-                    console.error('Download error:', err.message);
-                    res.status(500).send("Error occurred during download.");
-                } else {
-                    console.log('Download succeeded!');
-                }
-                });
-            })
-            .saveToFile(path.join(__dirname, "output.mp4"), "./temp");
-    })
-})
-  
+  const upload = multer({
+    storage: multer.diskStorage({
+      destination: (req, file, done) => done(null, req.workDirectory),
+      filename: (req, file, done) => done(null, `${randomUUID()}.${types[file.mimetype]}`),
+    }),
+    limits: { fileSize: maxFileSize, files: 2, fields: 0, parts: 2, fieldNameSize: 20 },
+    fileFilter: (req, file, done) => {
+      const allowed = file.fieldname === 'video' ? ['video/mp4', 'video/webm'] : ['audio/mpeg', 'audio/mp3'];
+      if (!allowed.includes(file.mimetype)) {
+        return done(Object.assign(new Error('Unsupported media type.'), { status: 415 }));
+      }
+      done(null, true);
+    },
+  }).fields([{ name: 'video', maxCount: 1 }, { name: 'audio', maxCount: 1 }]);
+
+  app.post('/merge', async (req, res) => {
+    if (active >= 2) return res.status(503).send('Video processing is busy. Try again shortly.');
+    active++;
+    const controller = new AbortController();
+    const abort = () => { if (!res.writableEnded) controller.abort(); };
+    res.on('close', abort);
+    let workDirectory;
+    try {
+      workDirectory = await mkdtemp(path.join(uploadRoot, 'video-merge-'));
+      req.workDirectory = workDirectory;
+      await new Promise((resolve, reject) => upload(req, res, error => error ? reject(error) : resolve()));
+      if (!req.files?.video?.[0] || !req.files?.audio?.[0]) {
+        return res.status(400).send('One video and one audio file are required.');
+      }
+      const output = path.join(workDirectory, 'output.mp4');
+      await merge(req.files.video[0].path, req.files.audio[0].path, output, controller.signal);
+      await new Promise((resolve, reject) => {
+        res.download(output, 'output.mp4', error => error ? reject(error) : resolve());
+      });
+    } catch (error) {
+      if (!res.headersSent && !res.destroyed) {
+        const status = error.code === 'LIMIT_FILE_SIZE' ? 413 : error instanceof multer.MulterError ? 400 : error.status || 500;
+        res.status(status).send(status === 500 ? 'Video processing failed.' : error.message);
+      }
+    } finally {
+      res.removeListener('close', abort);
+      if (workDirectory) await rm(workDirectory, { recursive: true, force: true });
+      active--;
+    }
+  });
+  return app;
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const port = Number(process.env.PORT || 3000);
+  const host = process.env.HOST || '127.0.0.1';
+  const server = createApp().listen(port, host, () => console.log(`Listening at http://${host}:${port}`));
+  server.requestTimeout = 120_000;
+}
